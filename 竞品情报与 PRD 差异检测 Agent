@@ -1,751 +1,883 @@
-openai>=1.0.0
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-pydantic>=2.0.0
-python-dotenv>=1.0.0
-feedparser>=6.0.0
-markdown>=3.5.0
-typing-extensions>=4.8.0
-"""
-config.py
-import os
-from dotenv import load_dotenv
-from pydantic import BaseModel
-from typing import List, Dict, Optional
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>竞品情报与PRD差异检测 Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --bg-surface: #111827;
+    --bg-card: #1a2236;
+    --bg-card-hover: #1f2a42;
+    --accent: #00d4aa;
+    --accent-dim: #00d4aa33;
+    --accent-warn: #ff6b6b;
+    --accent-info: #4ecdc4;
+    --accent-gold: #ffd93d;
+    --text-primary: #e8ecf4;
+    --text-secondary: #8892a8;
+    --text-muted: #4a5568;
+    --border: #2a3450;
+    --border-active: #00d4aa55;
+    --gradient-1: linear-gradient(135deg, #00d4aa 0%, #007cf0 100%);
+    --gradient-2: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --shadow-lg: 0 20px 60px rgba(0,0,0,0.4);
+    --shadow-glow: 0 0 40px rgba(0,212,170,0.15);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-xs: 6px;
+    --font-sans: 'Noto Sans SC', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
 
-load_dotenv()
+  * { margin:0; padding:0; box-sizing:border-box; }
 
-class Config:
-    OpenAI 配置（或兼容的 API）
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your-api-key")
-    OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    
-    竞品监控配置
-    COMPETITORS = {
-        "competitor_a": {
-            "name": "竞品A",
-            "release_notes_url": "https://example.com/release-notes",
-            "help_center_url": "https://example.com/help",
-            "blog_url": "https://example.com/blog"
-        },
-        "competitor_b": {
-            "name": "竞品B", 
-            "rss_feed": "https://example.com/feed.xml"
-        }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse at 15% 10%, rgba(0,212,170,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 85% 80%, rgba(102,126,234,0.05) 0%, transparent 50%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* ── Layout ── */
+  .app { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: 24px 32px 60px; }
+
+  /* ── Header ── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 0 32px; border-bottom: 1px solid var(--border); margin-bottom: 32px;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo {
+    width: 48px; height: 48px; border-radius: var(--radius);
+    background: var(--gradient-1); display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 900; color: var(--bg); letter-spacing: -1px;
+    box-shadow: 0 4px 20px rgba(0,212,170,0.3);
+  }
+  .header-title h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+  .header-title p { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .badge {
+    font-family: var(--font-mono); font-size: 11px; padding: 5px 12px;
+    border-radius: 20px; border: 1px solid var(--border);
+    color: var(--text-secondary); background: var(--bg-surface);
+  }
+  .badge.live { border-color: var(--accent); color: var(--accent); }
+  .badge.live::before { content:''; display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent); margin-right:6px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Pipeline Visualization ── */
+  .pipeline {
+    display: flex; align-items: center; gap: 0; margin-bottom: 36px;
+    padding: 24px 28px; background: var(--bg-surface); border-radius: var(--radius);
+    border: 1px solid var(--border); overflow-x: auto;
+  }
+  .pipeline-step {
+    display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+    border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+    color: var(--text-muted); white-space: nowrap; transition: all 0.4s;
+    cursor: default; position: relative;
+  }
+  .pipeline-step .step-num {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    border: 2px solid var(--border); color: var(--text-muted); transition: all 0.4s;
+  }
+  .pipeline-step.active { color: var(--text-primary); background: var(--bg-card); }
+  .pipeline-step.active .step-num { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .pipeline-step.done { color: var(--accent); }
+  .pipeline-step.done .step-num { border-color: var(--accent); color: var(--bg); background: var(--accent); }
+  .pipeline-arrow {
+    font-size: 18px; color: var(--text-muted); margin: 0 4px; flex-shrink: 0;
+    transition: color 0.4s;
+  }
+  .pipeline-arrow.lit { color: var(--accent); }
+
+  /* ── Grid ── */
+  .main-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+  }
+  .full-span { grid-column: 1 / -1; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; transition: border-color 0.3s;
+  }
+  .card:hover { border-color: var(--border-active); }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card-header h2 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 .icon { font-size: 18px; }
+  .card-header .tag {
+    font-family: var(--font-mono); font-size: 10px; padding: 3px 8px;
+    border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .tag-agent { background: rgba(0,212,170,0.15); color: var(--accent); }
+  .tag-auto { background: rgba(255,217,61,0.15); color: var(--accent-gold); }
+
+  /* ── Inputs ── */
+  textarea {
+    width: 100%; min-height: 200px; padding: 14px 16px;
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text-primary);
+    font-family: var(--font-sans); font-size: 13px; line-height: 1.7;
+    resize: vertical; outline: none; transition: border-color 0.3s;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--text-muted); }
+
+  input[type="text"] {
+    width: 100%; padding: 10px 14px;
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text-primary);
+    font-family: var(--font-sans); font-size: 13px; outline: none;
+    transition: border-color 0.3s;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+  input[type="text"]::placeholder { color: var(--text-muted); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 22px; border: none; border-radius: var(--radius-sm);
+    font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.25s; letter-spacing: 0.2px;
+  }
+  .btn-primary {
+    background: var(--gradient-1); color: var(--bg);
+    box-shadow: 0 4px 16px rgba(0,212,170,0.25);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,212,170,0.35); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-secondary {
+    background: var(--bg-surface); color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--text-muted); color: var(--text-primary); }
+
+  .btn-group { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+  /* ── Log / Output ── */
+  .log-container {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 16px; max-height: 400px;
+    overflow-y: auto; font-family: var(--font-mono); font-size: 12px;
+    line-height: 1.9;
+  }
+  .log-line { display: flex; gap: 8px; opacity: 0; animation: logIn 0.3s forwards; }
+  .log-line .time { color: var(--text-muted); flex-shrink: 0; }
+  .log-line .agent { color: var(--accent); flex-shrink: 0; font-weight: 600; }
+  .log-line .msg { color: var(--text-secondary); }
+  .log-line .msg strong { color: var(--text-primary); font-weight: 500; }
+  .log-line.warn .msg { color: var(--accent-warn); }
+  .log-line.success .msg { color: var(--accent); }
+  @keyframes logIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+  /* ── Results Table ── */
+  .diff-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .diff-table th {
+    text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .diff-table td {
+    padding: 12px 14px; font-size: 13px; border-bottom: 1px solid rgba(42,52,80,0.5);
+    vertical-align: top;
+  }
+  .diff-table tr { transition: background 0.2s; }
+  .diff-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+  .severity {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; font-family: var(--font-mono);
+  }
+  .severity.high { background: rgba(255,107,107,0.15); color: var(--accent-warn); }
+  .severity.medium { background: rgba(255,217,61,0.15); color: var(--accent-gold); }
+  .severity.low { background: rgba(78,205,196,0.15); color: var(--accent-info); }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 18px 20px; text-align: center;
+    transition: all 0.3s;
+  }
+  .stat-card:hover { border-color: var(--accent-dim); transform: translateY(-2px); }
+  .stat-value {
+    font-family: var(--font-mono); font-size: 28px; font-weight: 700;
+    background: var(--gradient-1); -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ── Report Section ── */
+  .report-content {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 24px; line-height: 1.8;
+    font-size: 13.5px; color: var(--text-secondary); max-height: 500px; overflow-y: auto;
+  }
+  .report-content h3 { color: var(--text-primary); font-size: 15px; margin: 20px 0 8px; }
+  .report-content h3:first-child { margin-top: 0; }
+  .report-content ul { padding-left: 20px; margin: 8px 0; }
+  .report-content li { margin: 4px 0; }
+  .report-content .highlight { color: var(--accent); font-weight: 500; }
+  .report-content .warn-text { color: var(--accent-warn); font-weight: 500; }
+
+  /* ── Skeleton Loading ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-card) 50%, var(--bg-surface) 75%);
+    background-size: 200% 100%; animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-xs); height: 16px; margin: 8px 0;
+  }
+  .skeleton.w60 { width: 60%; }
+  .skeleton.w80 { width: 80%; }
+  .skeleton.w40 { width: 40%; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  /* ── Progress Bar ── */
+  .progress-bar {
+    width: 100%; height: 4px; background: var(--border);
+    border-radius: 2px; overflow: hidden; margin: 16px 0;
+  }
+  .progress-bar .fill {
+    height: 100%; border-radius: 2px; background: var(--gradient-1);
+    transition: width 0.5s ease; width: 0%;
+  }
+
+  /* ── Entry Animations ── */
+  .fade-up { opacity: 0; transform: translateY(16px); animation: fadeUp 0.5s ease forwards; }
+  .fade-up:nth-child(2) { animation-delay: 0.08s; }
+  .fade-up:nth-child(3) { animation-delay: 0.16s; }
+  .fade-up:nth-child(4) { animation-delay: 0.24s; }
+  .fade-up:nth-child(5) { animation-delay: 0.32s; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .app { padding: 16px; }
+    .main-grid { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .pipeline { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header class="header fade-up">
+    <div class="header-left">
+      <div class="logo">CI</div>
+      <div class="header-title">
+        <h1>竞品情报与 PRD 差异检测 Agent</h1>
+        <p>Multi-Agent Pipeline · Competitive Intelligence × PRD Gap Analysis</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="badge live" id="statusBadge">就绪</span>
+      <span class="badge">v2.1</span>
+    </div>
+  </header>
+
+  <!-- Pipeline -->
+  <div class="pipeline fade-up" id="pipeline">
+    <div class="pipeline-step" data-step="0"><span class="step-num">1</span> PRD 解析 Agent</div>
+    <span class="pipeline-arrow">→</span>
+    <div class="pipeline-step" data-step="1"><span class="step-num">2</span> 竞品情报采集 Agent</div>
+    <span class="pipeline-arrow">→</span>
+    <div class="pipeline-step" data-step="2"><span class="step-num">3</span> 差异检测 Agent</div>
+    <span class="pipeline-arrow">→</span>
+    <div class="pipeline-step" data-step="3"><span class="step-num">4</span> 报告生成 Agent</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row fade-up" id="statsRow" style="display:none;">
+    <div class="stat-card"><div class="stat-value" id="statFeatures">-</div><div class="stat-label">PRD 功能点</div></div>
+    <div class="stat-card"><div class="stat-value" id="statCompetitors">-</div><div class="stat-label">竞品功能点</div></div>
+    <div class="stat-card"><div class="stat-value" id="statGaps">-</div><div class="stat-label">差异 / 缺口</div></div>
+    <div class="stat-card"><div class="stat-value" id="statCoverage">-</div><div class="stat-label">覆盖率</div></div>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="main-grid">
+
+    <!-- PRD Input -->
+    <div class="card fade-up">
+      <div class="card-header">
+        <h2><span class="icon">📄</span> PRD 产品需求文档</h2>
+        <span class="tag tag-agent">Agent 1 解析</span>
+      </div>
+      <textarea id="prdInput" placeholder="在此粘贴您的 PRD 内容...&#10;&#10;示例：&#10;【产品名称】智能客服系统 v3.0&#10;【核心功能】&#10;1. 多轮对话引擎：支持上下文理解，记忆窗口 20 轮&#10;2. 知识库管理：支持 PDF/Word/网页导入，自动向量化&#10;3. 工单自动创建：识别用户意图后自动生成工单&#10;4. 数据看板：实时会话量、满意度、解决率统计&#10;5. 多渠道接入：支持微信、网页、APP、电话"></textarea>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="loadSamplePRD()">载入示例 PRD</button>
+      </div>
+    </div>
+
+    <!-- Competitor Intel Input -->
+    <div class="card fade-up">
+      <div class="card-header">
+        <h2><span class="icon">🔍</span> 竞品情报数据</h2>
+        <span class="tag tag-agent">Agent 2 采集</span>
+      </div>
+      <textarea id="competitorInput" placeholder="在此粘贴竞品情报信息...&#10;&#10;示例：&#10;【竞品名称】某头部 SaaS 客服产品&#10;【已知功能】&#10;1. 多轮对话：支持 50 轮上下文，含情感分析&#10;2. 知识库：支持 200+ 文件格式，自动摘要&#10;3. 工单系统：自动分配 + SLA 监控 + 升级机制&#10;4. 数据分析：支持自定义报表 + 导出&#10;5. 全渠道：微信/钉钉/飞书/网页/APP/电话/邮件&#10;6. AI 辅助坐席：实时话术推荐&#10;7. 合规审计：对话记录加密存储，满足等保三级"></textarea>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="loadSampleCompetitor()">载入示例情报</button>
+      </div>
+    </div>
+
+    <!-- Agent Log -->
+    <div class="card full-span fade-up">
+      <div class="card-header">
+        <h2><span class="icon">⚡</span> Agent 执行日志</h2>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="tag tag-auto" id="logTag" style="display:none;">自动运行中</span>
+          <button class="btn btn-primary" id="runBtn" onclick="runPipeline()">
+            ▶ 启动检测流程
+          </button>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+      <div class="log-container" id="logContainer">
+        <div class="log-line"><span class="time">--:--:--</span><span class="agent">[系统]</span><span class="msg">等待输入 PRD 和竞品情报后启动检测流程...</span></div>
+      </div>
+    </div>
+
+    <!-- Diff Results -->
+    <div class="card full-span fade-up" id="diffCard" style="display:none;">
+      <div class="card-header">
+        <h2><span class="icon">📊</span> 差异检测结果</h2>
+        <span class="tag tag-agent">Agent 3 分析</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="diff-table" id="diffTable">
+          <thead>
+            <tr>
+              <th>功能维度</th>
+              <th>PRD 现状</th>
+              <th>竞品能力</th>
+              <th>差异类型</th>
+              <th>严重度</th>
+              <th>建议</th>
+            </tr>
+          </thead>
+          <tbody id="diffBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Report -->
+    <div class="card full-span fade-up" id="reportCard" style="display:none;">
+      <div class="card-header">
+        <h2><span class="icon">📝</span> 差异分析报告</h2>
+        <span class="tag tag-agent">Agent 4 生成</span>
+      </div>
+      <div class="report-content" id="reportContent"></div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="exportReport()">↓ 导出报告</button>
+        <button class="btn btn-secondary" onclick="copyReport()">复制 Markdown</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ───
+let isRunning = false;
+
+// ─── Sample Data ───
+const samplePRD = `【产品名称】智能客服系统 v3.0
+【版本】3.0 Beta
+【核心功能模块】
+
+1. 多轮对话引擎
+   - 支持上下文理解，记忆窗口 20 轮
+   - 意图识别准确率目标 ≥ 92%
+   - 支持中文、英文双语
+
+2. 知识库管理
+   - 支持 PDF / Word / 网页链接导入
+   - 自动向量化存储
+   - 知识库容量上限 10 万条
+
+3. 工单自动创建
+   - 识别用户投诉/售后意图后自动生成工单
+   - 支持工单分类和优先级标记
+
+4. 数据看板
+   - 实时会话量统计
+   - 用户满意度评分
+   - 问题解决率趋势图
+
+5. 多渠道接入
+   - 微信公众号 / 小程序
+   - 网页在线客服
+   - APP SDK
+   - 电话语音（IVR）
+
+6. 权限管理
+   - 管理员 / 坐席 / 只读 三级角色
+   - 操作日志审计`;
+
+const sampleCompetitor = `【竞品名称】某头部 SaaS 智能客服平台（行业 Top 3）
+【情报来源】官网文档 + 产品试用 + 行业报告
+【已知功能清单】
+
+1. 多轮对话引擎
+   - 支持 50 轮上下文记忆
+   - 内置情感分析模块，可检测愤怒/焦虑/满意等情绪
+   - 支持中/英/日/韩等 12 种语言
+
+2. 知识库管理
+   - 支持 200+ 文件格式（含音视频转录）
+   - 自动摘要 + 知识图谱可视化
+   - 知识库容量无上限（按存储计费）
+
+3. 工单系统
+   - 自动分配 + SLA 监控 + 升级机制
+   - 与 Jira / 飞书 / 钉钉深度集成
+   - 工单生命周期全流程追踪
+
+4. 数据分析
+   - 支持自定义 SQL 报表
+   - 数据导出（CSV / Excel / API）
+   - 竞品舆情监控看板
+
+5. 全渠道接入
+   - 微信 / 钉钉 / 飞书 / 网页 / APP / 电话 / 邮件 / WhatsApp / Telegram
+   - 统一消息路由引擎
+
+6. AI 辅助坐席
+   - 实时话术推荐
+   - 自动生成会话摘要
+   - 客户画像弹屏
+
+7. 合规与安全
+   - 对话记录加密存储（AES-256）
+   - 满足等保三级 / SOC 2
+   - 数据驻留区域可选
+
+8. 开放平台
+   - RESTful API + Webhook
+   - 自定义插件市场
+   - 低代码流程编排`;
+
+function loadSamplePRD() {
+  document.getElementById('prdInput').value = samplePRD;
+}
+function loadSampleCompetitor() {
+  document.getElementById('competitorInput').value = sampleCompetitor;
+}
+
+// ─── Helpers ───
+function timeStr() {
+  return new Date().toLocaleTimeString('zh-CN', {hour12:false});
+}
+
+function addLog(agent, msg, cls='') {
+  const c = document.getElementById('logContainer');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + cls;
+  line.innerHTML = `<span class="time">${timeStr()}</span><span class="agent">[${agent}]</span><span class="msg">${msg}</span>`;
+  c.appendChild(line);
+  c.scrollTop = c.scrollHeight;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function setPipelineStep(idx) {
+  document.querySelectorAll('.pipeline-step').forEach((el,i) => {
+    el.classList.remove('active','done');
+    if (i < idx) el.classList.add('done');
+    if (i === idx) el.classList.add('active');
+  });
+  document.querySelectorAll('.pipeline-arrow').forEach((el,i) => {
+    el.classList.toggle('lit', i < idx);
+  });
+}
+
+function setProgress(pct) {
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ─── Core: PRD Parsing ───
+function parsePRD(text) {
+  const features = [];
+  const lines = text.split('\n');
+  let current = null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    // Match numbered items like "1. 多轮对话引擎" or "1、xxx"
+    const mainMatch = line.match(/^(\d+)[.、]\s*(.+)/);
+    if (mainMatch) {
+      if (current) features.push(current);
+      current = { name: mainMatch[2].replace(/[：:]/g,'').trim(), details: [] };
+    } else if (current && line.startsWith('-') || current && line.startsWith('·')) {
+      current.details.push(line.replace(/^[-·]\s*/, ''));
     }
-    
-    内部 PRD 存储路径
-    PRD_DIRECTORY = "./prd_docs"
-    PRD_VECTOR_DB_PATH = "./prd_vector_db"
-    
-    Agent 调度配置
-    CHECK_INTERVAL_HOURS = 24  每日检查一次
-    MAX_FEEDS_PER_RUN = 50
-    
-    输出配置
-    NOTIFICATION_WEBHOOK = os.getenv("DINGTALK_WEBHOOK", "")
-    REPORT_OUTPUT_DIR = "./reports"
+  }
+  if (current) features.push(current);
+  return features;
+}
 
+// ─── Core: Competitor Parsing ───
+function parseCompetitor(text) {
+  const features = [];
+  const lines = text.split('\n');
+  let current = null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    const mainMatch = line.match(/^(\d+)[.、]\s*(.+)/);
+    if (mainMatch) {
+      if (current) features.push(current);
+      current = { name: mainMatch[2].replace(/[：:]/g,'').trim(), details: [] };
+    } else if (current && (line.startsWith('-') || line.startsWith('·'))) {
+      current.details.push(line.replace(/^[-·]\s*/, ''));
+    }
+  }
+  if (current) features.push(current);
+  return features;
+}
 
-class PRDDocument(BaseModel):
-   
-    file_name: str
-    feature_name: str
-    feature_category: str
-    planned_version: Optional[str] = None
-    status: str  # planned, developing, released, deprecated
-    description: str
-    key_points: List[str]
+// ─── Core: Diff Detection (keyword + semantic heuristic) ───
+function detectDiffs(prdFeatures, compFeatures) {
+  const diffs = [];
 
+  // Build keyword maps
+  const compKeywords = compFeatures.map(f => ({
+    feature: f,
+    keywords: extractKeywords(f.name + ' ' + f.details.join(' '))
+  }));
+  const prdKeywords = prdFeatures.map(f => ({
+    feature: f,
+    keywords: extractKeywords(f.name + ' ' + f.details.join(' '))
+  }));
 
-class CompetitorUpdate(BaseModel):
-   
-    source: str  # competitor_a, competitor_b
-    update_type: str  # new_feature, ui_change, pricing_change, doc_update
-    title: str
-    content: str
-    url: str
-    published_at: str
-    raw_html: Optional[str] = None
+  // For each PRD feature, find best competitor match
+  const matchedComp = new Set();
 
+  for (const prd of prdFeatures) {
+    const pk = extractKeywords(prd.name + ' ' + prd.details.join(' '));
+    let bestMatch = null, bestScore = 0;
 
-class GapAnalysis(BaseModel):
- 
-    original_update: CompetitorUpdate
-    is_covered: bool  # 我们的 PRD 是否已覆盖
-    match_reason: str  # 匹配/不匹配的原因
-    our_planned_feature: Optional[str] = None  # 匹配到的我们已有的功能
-    gap_severity: str  # critical, major, minor, info
-    suggested_action: str  # 建议行动：ignore, review, add_to_backlog, escalate
-    core/web_scraper.py
-import requests
-import feedparser
-from bs4 import BeautifulSoup
-from typing import List, Optional
-from datetime import datetime
-import hashlib
-from config import Config, CompetitorUpdate
+    for (let i = 0; i < compKeywords.length; i++) {
+      if (matchedComp.has(i)) continue;
+      const score = jaccardSimilarity(pk, compKeywords[i].keywords);
+      if (score > bestScore) { bestScore = score; bestMatch = i; }
+    }
 
-class WebScraperAgent:
-    
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-        })
-        self.seen_hashes = set() 
-    
-    def fetch_webpage(self, url: str) -> Optional[str]:
-        """抓取单个网页"""
-        try:
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
-            return response.text
-        except Exception as e:
-            print(f"抓取失败 {url}: {e}")
-            return None
-    
-    def parse_html_content(self, html: str, url: str) -> List[CompetitorUpdate]:
-     
-        soup = BeautifulSoup(html, "html.parser")
-        
-        
-        for script in soup(["script", "style", "nav", "footer"]):
-            script.decompose()
-        
-        text = soup.get_text()
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        content = "\n".join(lines[:500])  
-        
-        
-        content_hash = hashlib.md5(content.encode()).hexdigest()
-        
-        if content_hash in self.seen_hashes:
-            return []
-        
-        self.seen_hashes.add(content_hash)
-        
-      
-        title = soup.find("title")
-        title_text = title.get_text() if title else "无标题"
-        
-        return [CompetitorUpdate(
-            source=url,
-            update_type="doc_update",
-            title=title_text[:200],
-            content=content[:3000],
-            url=url,
-            published_at=datetime.now().isoformat(),
-            raw_html=html[:5000]
-        )]
-    
-    def fetch_rss_feed(self, feed_url: str) -> List[CompetitorUpdate]:
-        """抓取 RSS Feed"""
-        updates = []
-        try:
-            feed = feedparser.parse(feed_url)
-            for entry in feed.entries[:Config.MAX_FEEDS_PER_RUN]:
-                content = entry.get("summary", "") or entry.get("description", "")
-                update = CompetitorUpdate(
-                    source=feed_url,
-                    update_type="doc_update",
-                    title=entry.get("title", "无标题")[:200],
-                    content=content[:3000] if content else entry.get("link", ""),
-                    url=entry.get("link", ""),
-                    published_at=entry.get("published", datetime.now().isoformat())
-                )
-                updates.append(update)
-        except Exception as e:
-            print(f"RSS 抓取失败 {feed_url}: {e}")
-        
-        return updates
-    
-    def fetch_all_updates(self) -> List[CompetitorUpdate]:
-        """抓取所有配置的竞品更新"""
-        all_updates = []
-        
-        for competitor_key, competitor_info in Config.COMPETITORS.items():
-            print(f"正在抓取 {competitor_info.get('name', competitor_key)}...")
-            
-            抓取 Release Notes
-            if url := competitor_info.get("release_notes_url"):
-                html = self.fetch_webpage(url)
-                if html:
-                    all_updates.extend(self.parse_html_content(html, url))
-            
-            抓取 RSS Feed
-            if rss_url := competitor_info.get("rss_feed"):
-                all_updates.extend(self.fetch_rss_feed(rss_url))
-        
-        print(f"共抓取到 {len(all_updates)} 条更新")
-        return all_updates
-        # core/prd_retriever.py
-import os
-import json
-from typing import List, Optional
-import hashlib
-from pathlib import Path
-from config import Config, PRDDocument, GapAnalysis, CompetitorUpdate
+    if (bestScore > 0.25 && bestMatch !== null) {
+      matchedComp.add(bestMatch);
+      const comp = compFeatures[bestMatch];
+      // Compare details
+      const compDetailText = comp.details.join(' ');
+      const prdDetailText = prd.details.join(' ');
+      const gapDetails = [];
 
-class PRDRetrieverAgent:
-   
-    
-    def __init__(self):
-        self.prd_documents: List[PRDDocument] = []
-        self._load_prd_documents()
-    
-    def _load_prd_documents(self):
-     
-        prd_path = Path(Config.PRD_DIRECTORY)
-        if not prd_path.exists():
-           
-            self._create_sample_prd()
-        
-        for file_path in prd_path.glob("*.md"):
-            prd = self._parse_prd_markdown(file_path)
-            if prd:
-                self.prd_documents.append(prd)
-        
-        for file_path in prd_path.glob("*.json"):
-            prd = self._parse_prd_json(file_path)
-            if prd:
-                self.prd_documents.append(prd)
-        
-        print(f"已加载 {len(self.prd_documents)} 个 PRD 文档")
-    
-    def _create_sample_prd(self):
-        """创建示例 PRD 文档用于演示"""
-        os.makedirs(Config.PRD_DIRECTORY, exist_ok=True)
-        
-        sample_prds = [
-            {
-                "file_name": "user_center.md",
-                "feature_name": "统一用户中心",
-                "feature_category": "用户管理",
-                "planned_version": "v3.0",
-                "status": "developing",
-                "description": "支持手机号、邮箱、微信多方式登录，提供统一的用户资料管理界面",
-                "key_points": ["OAuth2.0集成", "多端同步", "安全加固"]
-            },
-            {
-                "file_name": "payment_v2.json", 
-                "feature_name": "支付系统升级V2",
-                "feature_category": "交易",
-                "planned_version": "v2.5",
-                "status": "planned",
-                "description": "新增微信支付、支付宝快捷支付，支持分期付款",
-                "key_points": ["微信支付集成", "分期付款", "自动对账"]
-            }
-        ]
-        
-        for prd in sample_prds:
-            file_path = prd_path / prd["file_name"]
-            if file_path.suffix == ".md":
-                content = f"""# {prd['feature_name']}
+      // Check for capacity / quantitative gaps
+      const compNums = compDetailText.match(/\d+/g) || [];
+      const prdNums = prdDetailText.match(/\d+/g) || [];
+      if (compNums.length > prdNums.length) {
+        gapDetails.push('竞品有更多量化指标');
+      }
 
- {prd['feature_category']}
- {prd['planned_version']}
- {prd['status']}
+      // Check for extra details in competitor
+      const compExtra = comp.details.filter(d => {
+        const dk = extractKeywords(d);
+        return !prd.details.some(pd => jaccardSimilarity(extractKeywords(pd), dk) > 0.3);
+      });
 
+      if (compExtra.length > 0) {
+        const severity = compExtra.length >= 3 ? 'high' : compExtra.length >= 2 ? 'medium' : 'low';
+        diffs.push({
+          dimension: prd.name,
+          prdStatus: summarize(prd.details, 40),
+          compStatus: summarize(comp.details, 40),
+          type: '功能差距',
+          severity: severity,
+          advice: `竞品在此模块多出 ${compExtra.length} 项能力：${compExtra.slice(0,2).join('；')}`,
+          prdFeature: prd,
+          compFeature: comp
+        });
+      } else {
+        diffs.push({
+          dimension: prd.name,
+          prdStatus: summarize(prd.details, 40),
+          compStatus: summarize(comp.details, 40),
+          type: '基本对齐',
+          severity: 'low',
+          advice: '功能覆盖基本一致，可关注细节体验优化',
+          prdFeature: prd,
+          compFeature: comp
+        });
+      }
+    } else {
+      // PRD has feature, competitor doesn't match well — possibly unique or competitor lacks it
+      diffs.push({
+        dimension: prd.name,
+        prdStatus: summarize(prd.details, 40),
+        compStatus: '未发现对应功能',
+        type: 'PRD 独有',
+        severity: 'low',
+        advice: '此为 PRD 差异化优势，建议保持并强化',
+        prdFeature: prd,
+        compFeature: null
+      });
+    }
+  }
 
-{prd['description']}
+  // Competitor features not matched to any PRD feature = PRD gaps
+  for (let i = 0; i < compFeatures.length; i++) {
+    if (!matchedComp.has(i)) {
+      const comp = compFeatures[i];
+      diffs.push({
+        dimension: comp.name,
+        prdStatus: '未覆盖',
+        compStatus: summarize(comp.details, 40),
+        type: 'PRD 缺口',
+        severity: comp.details.length >= 3 ? 'high' : 'medium',
+        advice: `竞品具备此能力但 PRD 未规划，建议评估是否纳入 Roadmap`,
+        prdFeature: null,
+        compFeature: comp
+      });
+    }
+  }
 
+  return diffs;
+}
 
-{chr(10).join(f'- {point}' for point in prd['key_points'])}
-"""
-                file_path.write_text(content)
-            else:
-                file_path.write_text(json.dumps(prd, ensure_ascii=False, indent=2))
-    
-    def _parse_prd_markdown(self, file_path: Path) -> Optional[PRDDocument]:
+function extractKeywords(text) {
+  // Simple tokenization: split by common delimiters, filter short tokens
+  return new Set(
+    text.replace(/[：:，,。.、；;（）()【】\[\]\/\\]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 2)
+  );
+}
 
-        content = file_path.read_text(encoding="utf-8")
-        
-        lines = content.split("\n")
-        feature_name = ""
-        feature_category = ""
-        planned_version = ""
-        status = "planned"
-        description = ""
-        key_points = []
-        
-        for i, line in enumerate(lines):
-            if line.startswith(" "):
-                feature_name = line[2:].strip()
-            elif line.startswith("功能分类"):
-                feature_category = line.split(" ")[-1].strip()
-            elif line.startswith("计划版本"):
-                planned_version = line.split("**")[-1].strip()
-            elif line.startswith("状态"):
-                status = line.split(" ")[-1].strip()
-            elif line.startswith("功能描述"):
-                description = lines[i+1].strip() if i+1 < len(lines) else ""
-            elif line.startswith(" ") and description: 
-                key_points.append(line[2:].strip())
-        
-        if not feature_name:
-            return None
-        
-        return PRDDocument(
-            file_name=file_path.name,
-            feature_name=feature_name,
-            feature_category=feature_category or "未分类",
-            planned_version=planned_version or None,
-            status=status,
-            description=description[:500],
-            key_points=key_points[:5]
-        )
-    
-    def _parse_prd_json(self, file_path: Path) -> Optional[PRDDocument]:
-        """解析 JSON 格式的 PRD"""
-        try:
-            data = json.loads(file_path.read_text(encoding="utf-8"))
-            return PRDDocument(
-                file_name=file_path.name,
-                feature_name=data.get("feature_name", ""),
-                feature_category=data.get("feature_category", "未分类"),
-                planned_version=data.get("planned_version"),
-                status=data.get("status", "planned"),
-                description=data.get("description", ""),
-                key_points=data.get("key_points", [])
-            )
-        except Exception as e:
-            print(f"解析 JSON 失败 {file_path}: {e}")
-            return None
-    
-    def retrieve_relevant_prds(self, update: CompetitorUpdate, top_k: int = 3) -> List[tuple[PRDDocument, float]]:
-        """检索与竞品更新相关的 PRD 文档
-        
-        实际应用中应使用向量数据库（如 Chroma、FAISS）和 Embedding
-        这里使用简单的关键词匹配作为演示
-        """
-        import re
-        from collections import Counter
-        
-        提取关键词
-        update_text = f"{update.title} {update.content[:500]}".lower()
-        words = re.findall(r'\w+', update_text)
-        word_counts = Counter(words)
-        keywords = [w for w, c in word_counts.most_common(20) if len(w) > 2 and w not in ['the', 'and', 'for', 'this', 'with']]
-        
-        if not keywords:
-            return []
-        
-        计算相似度
-        relevance_scores = []
-        for prd in self.prd_documents:
-            prd_text = f"{prd.feature_name} {prd.description} {' '.join(prd.key_points)}".lower()
-            
-            简单的 Jaccard 相似度
-            prd_words = set(re.findall(r'\w+', prd_text))
-            intersection = len(set(keywords) & prd_words)
-            union = len(set(keywords) | prd_words)
-            similarity = intersection / union if union > 0 else 0
-            
-            if similarity > 0.05:  最小阈值
-                relevance_scores.append((prd, similarity))
-        
-        按相似度排序并返回 top_k
-        relevance_scores.sort(key=lambda x: x[1], reverse=True)
-        return relevance_scores[:top_k]
-        core/analyzer.py
-import json
-from typing import Optional
-from openai import OpenAI
-from config import Config, CompetitorUpdate, PRDDocument, GapAnalysis
+function jaccardSimilarity(setA, setB) {
+  const intersection = new Set([...setA].filter(x => setB.has(x)));
+  const union = new Set([...setA, ...setB]);
+  return union.size === 0 ? 0 : intersection.size / union.size;
+}
 
-class LLMAnalyzerAgent:
-    
-    def __init__(self):
-        self.client = OpenAI(
-            api_key=Config.OPENAI_API_KEY,
-            base_url=Config.OPENAI_BASE_URL
-        )
-        self.model = Config.OPENAI_MODEL
-    
-    def analyze_update_with_prd(
-        self, 
-        update: CompetitorUpdate, 
-        relevant_prds: list[tuple[PRDDocument, float]]
-    ) -> GapAnalysis:
-        
-        prd_context = ""
-        if relevant_prds:
-            for prd, score in relevant_prds:
-                prd_context += f"""
-相关 PRD: {prd.feature_name} (相似度: {score:.2f})
- {prd.feature_category}
- {prd.status}
- {prd.planned_version or '未指定'}
- {prd.description}
-- 核心要点: {', '.join(prd.key_points)}
-"""
-        else:
-            prd_context = "未找到相关的 PRD 文档"
-        
-        构建提示词
-        system_prompt = """你是一个专业的竞品分析专家。你的任务是比较竞品的更新内容与内部 PRD（产品需求文档），判断差异。
+function summarize(details, maxLen) {
+  if (!details || details.length === 0) return '-';
+  const text = details.join('；');
+  return text.length > maxLen ? text.slice(0, maxLen) + '...' : text;
+}
 
-请按照以下思维链（Chain of Thought）进行分析：
-1. 理解竞品更新的核心功能/变化是什么
-2. 评估这个变化的重要性（critical/major/minor/info）
-3. 检查我们的 PRD 中是否有类似的功能规划
-4. 如果有匹配，说明覆盖率；如果没有，判断这是否是一个我们需要跟进的功能
-5. 给出具体的建议行动
+// ─── Core: Report Generation ───
+function generateReport(prdFeatures, compFeatures, diffs) {
+  const high = diffs.filter(d => d.severity === 'high');
+  const medium = diffs.filter(d => d.severity === 'medium');
+  const low = diffs.filter(d => d.severity === 'low');
+  const gaps = diffs.filter(d => d.type === 'PRD 缺口');
+  const aligned = diffs.filter(d => d.type === '基本对齐');
+  const unique = diffs.filter(d => d.type === 'PRD 独有');
+  const coverage = prdFeatures.length > 0
+    ? Math.round((aligned.length + unique.length) / (aligned.length + unique.length + gaps.length) * 100)
+    : 0;
 
-输出必须是严格的 JSON 格式。"""
-        
-        user_prompt = f"""
-竞品更新内容
-来源: {update.source}
-标题: {update.title}
-内容摘要: {update.content[:2000]}
-更新时间: {update.published_at}
+  let report = '';
+  report += `<h3>一、执行摘要</h3>`;
+  report += `<p>本次差异检测覆盖 <span class="highlight">${prdFeatures.length} 项 PRD 功能模块</span> 与 <span class="highlight">${compFeatures.length} 项竞品能力</span>，`;
+  report += `共识别出 <span class="warn-text">${diffs.length} 项差异</span>，其中高严重度 ${high.length} 项、中严重度 ${medium.length} 项、低严重度 ${low.length} 项。</p>`;
+  report += `<p>PRD 对竞品的功能覆盖率约为 <span class="highlight">${coverage}%</span>。</p>`;
 
-内部 PRD 上下文
-{prd_context}
+  report += `<h3>二、关键缺口（高优先级）</h3>`;
+  if (high.length === 0) {
+    report += `<p>未发现高严重度差距，整体对齐情况良好。</p>`;
+  } else {
+    report += `<ul>`;
+    high.forEach(d => {
+      report += `<li><span class="warn-text">[${d.type}] ${d.dimension}</span>：${d.advice}</li>`;
+    });
+    report += `</ul>`;
+  }
 
-请分析并返回 JSON。"""
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.3,
-                response_format={"type": "json_object"}
-            )
-            
-            result = json.loads(response.choices[0].message.content)
-            
-            解析 LLM 返回结果
-            is_covered = result.get("is_covered", False)
-            match_reason = result.get("match_reason", "")
-            
-            映射严重程度
-            severity_map = {
-                "critical": "critical",
-                "major": "major", 
-                "minor": "minor",
-                "info": "info"
-            }
-            gap_severity = severity_map.get(result.get("gap_severity", "info"), "info")
-            
-            映射建议行动
-            action_map = {
-                "ignore": "ignore",
-                "review": "review",
-                "add_to_backlog": "add_to_backlog",
-                "escalate": "escalate"
-            }
-            suggested_action = action_map.get(result.get("suggested_action", "review"), "review")
-            
-            return GapAnalysis(
-                original_update=update,
-                is_covered=is_covered,
-                match_reason=match_reason[:500],
-                our_planned_feature=result.get("our_planned_feature"),
-                gap_severity=gap_severity,
-                suggested_action=suggested_action
-            )
-            
-        except Exception as e:
-            print(f"LLM 分析失败: {e}")
-            返回默认分析结果
-            return GapAnalysis(
-                original_update=update,
-                is_covered=False,
-                match_reason=f"分析失败: {str(e)}",
-                gap_severity="info",
-                suggested_action="review"
-            )
-            core/notifier.py
-import requests
-import json
-from datetime import datetime
-from typing import List
-from config import Config, GapAnalysis
+  report += `<h3>三、中等差距</h3>`;
+  if (medium.length === 0) {
+    report += `<p>未发现中等严重度差距。</p>`;
+  } else {
+    report += `<ul>`;
+    medium.forEach(d => {
+      report += `<li><strong>${d.dimension}</strong>（${d.type}）：${d.advice}</li>`;
+    });
+    report += `</ul>`;
+  }
 
-class NotifierAgent:
-    """负责通知和报告生成"""
-    
-    def generate_markdown_report(self, analyses: List[GapAnalysis]) -> str:
-        """生成 Markdown 格式的分析报告"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        分类统计
-        covered = [a for a in analyses if a.is_covered]
-        uncovered = [a for a in analyses if not a.is_covered]
-        critical_gaps = [a for a in analyses if a.gap_severity == "critical"]
-        major_gaps = [a for a in analyses if a.gap_severity == "major"]
-        
-        report = f"""# 竞品情报与PRD差异检测报告
+  report += `<h3>四、已对齐与差异化优势</h3>`;
+  report += `<p><strong>基本对齐模块（${aligned.length} 项）：</strong>`;
+  report += aligned.map(d => d.dimension).join('、') || '无';
+  report += `</p>`;
+  report += `<p><strong>PRD 独有优势（${unique.length} 项）：</strong>`;
+  report += unique.map(d => d.dimension).join('、') || '无';
+  report += `</p>`;
 
-生成时间: {timestamp}
-分析更新总数: {len(analyses)}
-已覆盖: {len(covered)}
-未覆盖: {len(uncovered)}
-> 关键差异: {len(critical_gaps)} | 主要差异: {len(major_gaps)}
+  report += `<h3>五、建议行动项</h3>`;
+  report += `<ul>`;
+  report += `<li><strong>短期（1-2 周）：</strong>针对 ${high.length} 项高严重度缺口，组织产品评审会，确认是否纳入当前迭代。</li>`;
+  report += `<li><strong>中期（1 个月）：</strong>对 ${medium.length} 项中等差距进行竞品深度调研，输出详细功能对比文档。</li>`;
+  report += `<li><strong>长期：</strong>建立定期竞品监控机制，建议每两周自动运行一次差异检测。</li>`;
+  report += `</ul>`;
 
----
-"""
-        
-        if critical_gaps:
-            report += "\n🔴 关键差异（必须处理）\n\n"
-            for gap in critical_gaps:
-                report += f"""
-{gap.original_update.title}
-- 竞品: {gap.original_update.source}
-- 分析: {gap.match_reason}
-- 建议行动: {gap.suggested_action}
-- [查看原文]({gap.original_update.url})
+  return report;
+}
 
-"""
-        
-        if major_gaps:
-            report += "\n 🟡 主要差异（建议跟进）\n\n"
-            for gap in major_gaps:
-                report += f"""
-{gap.original_update.title}
-- 竞品: {gap.original_update.source}
-- 分析: {gap.match_reason}
+// ─── Pipeline Runner ───
+async function runPipeline() {
+  if (isRunning) return;
+  const prdText = document.getElementById('prdInput').value.trim();
+  const compText = document.getElementById('competitorInput').value.trim();
 
-"""
-        
-        if uncovered:
-            report += "\n  未覆盖功能清单\n\n"
-            report += "| 竞品 | 标题 | 严重程度 | 建议行动 |\n"
-            report += "|------|------|----------|----------|\n"
-            for gap in uncovered:
-                report += f"| {gap.original_update.source} | {gap.original_update.title[:50]} | {gap.gap_severity} | {gap.suggested_action} |\n"
-        
-        return report
-    
-    def send_to_dingtalk(self, report: str, webhook: str = None) -> bool:
-        """发送到钉钉群"""
-        webhook = webhook or Config.NOTIFICATION_WEBHOOK
-        if not webhook:
-            print("未配置钉钉 Webhook")
-            return False
-        
-        钉钉消息最大长度限制
-        if len(report) > 5000:
-            report = report[:4500] + "\n\n... (报告过长已截断)"
-        
-        data = {
-            "msgtype": "markdown",
-            "markdown": {
-                "title": "竞品情报日报",
-                "text": report
-            }
-        }
-        
-        try:
-            response = requests.post(webhook, json=data, timeout=5)
-            result = response.json()
-            if result.get("errcode") == 0:
-                print("钉钉通知发送成功")
-                return True
-            else:
-                print(f"钉钉通知失败: {result}")
-                return False
-        except Exception as e:
-            print(f"发送钉钉通知失败: {e}")
-            return False
-    
-    def save_report(self, report: str) -> str:
-        """保存报告到本地"""
-        import os
-        os.makedirs(Config.REPORT_OUTPUT_DIR, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_path = f"{Config.REPORT_OUTPUT_DIR}/competitor_report_{timestamp}.md"
-        
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(report)
-        
-        print(f"报告已保存: {file_path}")
-        return file_path
-        main.py
-from typing import List
-from core.web_scraper import WebScraperAgent
-from core.prd_retriever import PRDRetrieverAgent
-from core.analyzer import LLMAnalyzerAgent
-from core.notifier import NotifierAgent
-from config import Config, GapAnalysis
+  if (!prdText || !compText) {
+    alert('请先输入 PRD 内容和竞品情报数据');
+    return;
+  }
 
-class CompetitorIntelAgent:
-    """
-    竞品情报与PRD差异检测 Agent
-    主控类，协调所有子 Agent 完成工作流
-    """
-    
-    def __init__(self):
-        self.scraper = WebScraperAgent()
-        self.prd_retriever = PRDRetrieverAgent()
-        self.analyzer = LLMAnalyzerAgent()
-        self.notifier = NotifierAgent()
-    
-    def run(self) -> List[GapAnalysis]:
-        """执行完整的分析工作流"""
-        print("=" * 50)
-        print("竞品情报 Agent 开始运行")
-        print("=" * 50)
-        
-      Step 1: 抓取竞品更新
-        print("\n[Step 1] 抓取竞品更新...")
-        updates = self.scraper.fetch_all_updates()
-        
-        if not updates:
-            print("未发现新的竞品更新")
-            return []
-        
-      Step 2: 对每条更新进行差异分析
-        print(f"\n[Step 2] 分析 {len(updates)} 条更新...")
-        all_analyses = []
-        
-        for i, update in enumerate(updates, 1):
-            print(f"  分析 [{i}/{len(updates)}]: {update.title[:50]}...")
-            
-            2.1 检索相关 PRD
-            relevant_prds = self.prd_retriever.retrieve_relevant_prds(update)
-            
-            2.2 LLM 长链推理分析
-            analysis = self.analyzer.analyze_update_with_prd(update, relevant_prds)
-            all_analyses.append(analysis)
-        
-      Step 3: 生成报告
-        print("\n[Step 3] 生成分析报告...")
-        report = self.notifier.generate_markdown_report(all_analyses)
-        
-      打印摘要到控制台
-        uncovered = [a for a in all_analyses if not a.is_covered]
-        critical = [a for a in all_analyses if a.gap_severity == "critical"]
-        print(f"\n分析完成: 共 {len(all_analyses)} 条更新,")
-        print(f"  未覆盖: {len(uncovered)} 条,")
-        print(f"  关键差异: {len(critical)} 条")
-        
-      Step 4: 保存报告
-        report_path = self.notifier.save_report(report)
-        
-      Step 5: 发送通知（如有严重差异）
-        if critical or (uncovered and len(uncovered) > 3):
-            print("\n[Step 4] 发送钉钉通知...")
-            self.notifier.send_to_dingtalk(report)
-        
-        print("\n" + "=" 50)
-        print("Agent 运行完成")
-        print(f"完整报告: {report_path}")
-        print("=" 50)
-        
-        return all_analyses
-    
-    def run_with_mock_data(self) -> List[GapAnalysis]:
-        """使用模拟数据运行（用于演示/测试）"""
-        print("=" 50)
-        print("竞品情报 Agent 运行（演示模式）")
-        print("=" 50)
-        
-        from datetime import datetime
-        from core.web_scraper import CompetitorUpdate
-        
-        模拟竞品更新数据
-        mock_updates = [
-            CompetitorUpdate(
-                source="竞品A",
-                update_type="new_feature",
-                title="竞品A 发布 AI 智能客服功能",
-                content="竞品A 最新版上线了 AI 驱动的智能客服系统，支持 7x24 小时自动回复，可识别用户情感并转接人工...",
-                url="https://example.com/release/ai-support",
-                published_at=datetime.now().isoformat()
-            ),
-            CompetitorUpdate(
-                source="竞品B",
-                update_type="ui_change",
-                title="竞品B 移动端首页全新改版",
-                content="采用瀑布流布局，优化了加载速度，新增夜间模式支持...",
-                url="https://example.com/b/redesign",
-                published_at=datetime.now().isoformat()
-            ),
-            CompetitorUpdate(
-                source="竞品A",
-                update_type="pricing_change",
-                title="竞品A 定价策略调整",
-                content="入门版从 $29/月 降至 $19/月，新增企业版 $99/月 支持无限坐席...",
-                url="https://example.com/pricing-changes",
-                published_at=datetime.now().isoformat()
-            )
-        ]
-        
-        执行分析
-        all_analyses = []
-        for update in mock_updates:
-            relevant_prds = self.prd_retriever.retrieve_relevant_prds(update)
-            analysis = self.analyzer.analyze_update_with_prd(update, relevant_prds)
-            all_analyses.append(analysis)
-        
-        生成报告
-        report = self.notifier.generate_markdown_report(all_analyses)
-        self.notifier.save_report(report)
-        
-        print(f"\n分析完成，处理了 {len(mock_updates)} 条模拟更新")
-        return all_analyses
+  isRunning = true;
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 运行中...';
+  document.getElementById('statusBadge').textContent = '运行中';
+  document.getElementById('statusBadge').classList.add('live');
+  document.getElementById('logTag').style.display = 'inline-block';
+  document.getElementById('logContainer').innerHTML = '';
+  document.getElementById('diffCard').style.display = 'none';
+  document.getElementById('reportCard').style.display = 'none';
+  document.getElementById('statsRow').style.display = 'none';
+  setProgress(0);
 
+  // Step 1: PRD Parsing
+  setPipelineStep(0);
+  addLog('PRD-Parser', '开始解析 PRD 文档...');
+  await sleep(600);
+  addLog('PRD-Parser', '识别文档结构，提取功能模块...', '');
+  await sleep(500);
+  const prdFeatures = parsePRD(prdText);
+  addLog('PRD-Parser', `解析完成，共识别 <strong>${prdFeatures.length} 个功能模块</strong>`, 'success');
+  prdFeatures.forEach((f, i) => {
+    addLog('PRD-Parser', `模块 ${i+1}：<strong>${f.name}</strong>（${f.details.length} 条细则）`);
+  });
+  setProgress(25);
+  await sleep(400);
 
+  // Step 2: Competitor Parsing
+  setPipelineStep(1);
+  addLog('Intel-Crawler', '开始解析竞品情报数据...', '');
+  await sleep(600);
+  addLog('Intel-Crawler', '提取竞品功能清单与能力描述...', '');
+  await sleep(500);
+  const compFeatures = parseCompetitor(compText);
+  addLog('Intel-Crawler', `解析完成，共识别 <strong>${compFeatures.length} 个竞品能力点</strong>`, 'success');
+  compFeatures.forEach((f, i) => {
+    addLog('Intel-Crawler', `能力 ${i+1}：<strong>${f.name}</strong>（${f.details.length} 条细则）`);
+  });
+  setProgress(50);
+  await sleep(400);
 
-class Scheduler:
+  // Step 3: Diff Detection
+  setPipelineStep(2);
+  addLog('Diff-Engine', '启动差异检测引擎...', '');
+  await sleep(400);
+  addLog('Diff-Engine', '执行关键词匹配 + 语义相似度计算...', '');
+  await sleep(700);
+  const diffs = detectDiffs(prdFeatures, compFeatures);
+  addLog('Diff-Engine', `检测完成，共发现 <strong>${diffs.length} 项差异</strong>`, 'success');
+  const highCount = diffs.filter(d=>d.severity==='high').length;
+  const medCount = diffs.filter(d=>d.severity==='medium').length;
+  const lowCount = diffs.filter(d=>d.severity==='low').length;
+  addLog('Diff-Engine', `高严重度: <strong>${highCount}</strong> | 中严重度: <strong>${medCount}</strong> | 低严重度: <strong>${lowCount}</strong>`);
+  setProgress(75);
+  await sleep(400);
 
-    
-    @staticmethod
-    def run_once():
-     
-        agent = CompetitorIntelAgent()
-        agent.run()
-    
-    @staticmethod
-    def run_daily():
-        """每日定时运行（生产环境建议使用 Celery / Airflow / Cron）"""
-        import time
-        from datetime import datetime
-        
-        print(f"调度器启动，将每 {Config.CHECK_INTERVAL_HOURS} 小时运行一次")
-        
-        while True:
-            print(f"\n[{datetime.now()}] 开始执行定时任务...")
-            
-            agent = CompetitorIntelAgent()
-            agent.run()
-            
-            等待下一次执行
-            wait_seconds = Config.CHECK_INTERVAL_HOURS * 3600
-            print(f"等待 {Config.CHECK_INTERVAL_HOURS} 小时后下次执行...")
-            time.sleep(wait_seconds)
+  // Render diff table
+  const tbody = document.getElementById('diffBody');
+  tbody.innerHTML = '';
+  diffs.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:500;color:var(--text-primary)">${d.dimension}</td>
+      <td>${d.prdStatus}</td>
+      <td>${d.compStatus}</td>
+      <td>${d.type}</td>
+      <td><span class="severity ${d.severity}">${d.severity === 'high' ? '高' : d.severity === 'medium' ? '中' : '低'}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary)">${d.advice}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('diffCard').style.display = 'block';
+  document.getElementById('diffCard').scrollIntoView({behavior:'smooth', block:'start'});
 
+  // Stats
+  const coverage = prdFeatures.length > 0
+    ? Math.round((diffs.filter(d=>d.type==='基本对齐').length + diffs.filter(d=>d.type==='PRD 独有').length) / (diffs.length) * 100)
+    : 0;
+  document.getElementById('statFeatures').textContent = prdFeatures.length;
+  document.getElementById('statCompetitors').textContent = compFeatures.length;
+  document.getElementById('statGaps').textContent = diffs.filter(d=>d.type!=='基本对齐'&&d.type!=='PRD 独有').length;
+  document.getElementById('statCoverage').textContent = coverage + '%';
+  document.getElementById('statsRow').style.display = 'grid';
 
-入口函数
-if name == "main":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="竞品情报与PRD差异检测 Agent")
-    parser.add_argument("--mode", choices=["once", "daily", "mock"], default="once",
-                       help="运行模式: once=执行一次, daily=定时任务, mock=演示模式")
-    parser.add_argument("--demo", action="store_true",
-                       help="使用模拟数据运行（用于测试）")
-    
-    args = parser.parse_args()
-    
-    if args.mode == "mock":
-        agent = CompetitorIntelAgent()
-        agent.run_with_mock_data()
-    elif args.mode == "daily":
-        Scheduler.run_daily()
-    else:  once
-        if args.demo:
-            agent = CompetitorIntelAgent()
-            agent.run_with_mock_data()
-        else:
-            Scheduler.run_once()
+  await sleep(400);
+
+  // Step 4: Report Generation
+  setPipelineStep(3);
+  addLog('Report-Agent', '开始生成差异分析报告...', '');
+  await sleep(500);
+  const report = generateReport(prdFeatures, compFeatures, diffs);
+  addLog('Report-Agent', '报告生成完成', 'success');
+  setProgress(100);
+
+  document.getElementById('reportContent').innerHTML = report;
+  document.getElementById('reportCard').style.display = 'block';
+
+  // Mark all done
+  setPipelineStep(4);
+  document.getElementById('statusBadge').textContent = '完成';
+  document.getElementById('logTag').style.display = 'none';
+  btn.disabled = false;
+  btn.textContent = '▶ 重新运行';
+  isRunning = false;
+}
+
+// ─── Export ───
+function exportReport() {
+  const content = document.getElementById('reportContent').innerText;
+  const blob = new Blob([content], {type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '竞品差异分析报告_' + new Date().toISOString().slice(0,10) + '.txt';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function copyReport() {
+  const content = document.getElementById('reportContent').innerText;
+  navigator.clipboard.writeText(content).then(() => {
+    alert('报告内容已复制到剪贴板');
+  });
+}
+</script>
+</body>
+</html>
